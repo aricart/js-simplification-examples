@@ -21,36 +21,37 @@ let bytes = 0;
 const start = Date.now();
 
 const msgs = await consumer.consume();
-for await (const r of msgs) {
-  if (r.error) {
-    console.log(r.error.message);
-  } else {
-    const m = r.value!;
-    bytes += m.data.length;
-    if (m.seq % 50_000 === 0) {
-      console.log(m?.seq);
-    }
-    if (m.info.pending === 0) {
-      done();
+const done = (async () => {
+  for await (const r of msgs) {
+    if (r.error) {
+      console.log(r.error.message);
+    } else {
+      const m = r.value!;
+      bytes += m.data.length;
+      if (m.seq % 50_000 === 0) {
+        console.log(m?.seq);
+      }
+      if (m.info.pending === 0) {
+        break;
+      }
     }
   }
-}
+})();
 
-async function done() {
-  await msgs.close();
+await done;
+console.log("done");
+await msgs.stop();
+const time = parseInt(`${Date.now() - start}`);
+console.log(
+  `processed ${msgs.getProcessed()} msgs in ${time}ms - ${
+    ((msgs.getProcessed() / time) * 1000).toFixed(0)
+  } msgs/sec`,
+);
+console.log(
+  `${bytes / 1_000_000}Mb - ${
+    ((bytes / 1_000_000 / time) * 1000).toFixed(2)
+  }Mb/sec`,
+);
 
-  const time = parseInt(`${Date.now() - start}`);
-  console.log(
-    `processed ${msgs.getProcessed()} msgs in ${time}ms - ${
-      ((msgs.getProcessed() / time) * 1000).toFixed(0)
-    } msgs/sec`,
-  );
-  console.log(
-    `${bytes / 1_000_000}Mb - ${
-      ((bytes / 1_000_000 / time) * 1000).toFixed(2)
-    }Mb/sec`,
-  );
-
-  await consumer.delete();
-  await nc.close();
-}
+await consumer.delete();
+await nc.close();
